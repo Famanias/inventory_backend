@@ -44,23 +44,26 @@ class InsightsView(APIView):
                 "**Inventory Data**:\n"
                 f"{inventory_summary}\n\n"
                 "**Instructions**:\n"
-                "- **Summary**: Describe the overall inventory, including total items, number of categories, total value, and the largest category by item count. "
-                "Include a hypothetical comparison to the previous period (e.g., last year or quarter, assume reasonable growth or decline).\n"
-                "- **Trends**: Identify growth or decline patterns for products or categories, inferring based on quantities (e.g., low stock suggests high demand).\n"
-                "- **Actions**: Suggest restocking for specific low or out-of-stock items and optimization strategies (e.g., reduce overstock, bundle items).\n"
-                "- Each section should be a single paragraph or bullet list, max 100 words.\n"
-                "- Use markdown for formatting (e.g., **Summary**, - Bullet).\n"
-                "- **Important**: Return the response as a JSON object with keys 'summary', 'trends', and 'actions'. "
-                "Wrap the JSON in triple backticks (```json\n...\n```) to ensure it is valid and parseable.\n\n"
+                "- **Summary**: Describe the overall inventory in three distinct paragraphs (use \\n\\n for paragraph breaks). "
+                "First paragraph: Include total items, number of categories, and total value. "
+                "Second paragraph: List the top categories with their percentages (e.g., 'Electronics (42%)'). If percentages aren't calculable, explain why. "
+                "Third paragraph: Provide a hypothetical comparison to the previous period, prefixed with '🔄 Based on historical data' (e.g., '🔄 Based on historical data, your current inventory levels are 18% higher than the same period last year').\n"
+                "- **Trends**: Write three distinct paragraphs (use \\n\\n for paragraph breaks), identifying growth or decline patterns for products or categories, inferring based on quantities (e.g., low stock suggests high demand). "
+                "First paragraph: Discuss demand patterns (e.g., 'Low stock levels of X suggest high demand'). "
+                "Second paragraph: Comment on inventory management (e.g., 'No out-of-stock items indicate effective inventory management'). "
+                "Third paragraph: End with a note like '📈 Trend analysis based on current data, with recommendations for improvement'.\n"
+                "- **Actions**: Provide recommendations in two sections with markdown formatting:\n"
+                "  - Start with '**⚠ Restock Recommendations:**' followed by a markdown list (using '-') of specific low or out-of-stock items (e.g., '- Wireless Mouse (8 remaining)').\n"
+                "  - Then add '**💡 Optimization Suggestions:**' followed by a markdown list (using '-') of strategies (e.g., '- Reduce desk lamp inventory by 15% based on seasonal trends').\n"
+                "  - Use \\n for line breaks between bullets and sections.\n"
+                "- Each section should be as detailed as possible.\n"
+                "- **Critical**: Return ONLY a valid JSON object with keys 'summary', 'trends', 'actions'. The values should be strings with markdown and emojis where specified. "
+                "Do not include any text outside the JSON. Ensure the JSON is parseable.\n\n"
                 "**Example Output**:\n"
-                "```json\n"
-                "{\n"
-                "  \"summary\": \"Your inventory has 10 items across 3 categories...\",\n"
-                "  \"trends\": \"Electronics show high demand...\",\n"
-                "  \"actions\": \"- Restock Item X (0 remaining)\\n- Bundle Item Y...\"\n"
-                "}\n"
-                "```\n\n"
-                "Now, generate the insights based on the provided data."
+                "{\"summary\": \"Your inventory consists of 93 items across 5 categories, with a total value of $12,489.75.\\n\\nElectronics is your largest category (42%), followed by Home Office (28%) and Accessories (15%).\\n\\n🔄 Based on historical data, your current inventory levels are 18% higher than the same period last year.\", "
+                "\"trends\": \"Wireless Headphones and Ergonomic Keyboards have shown consistent growth over the past 3 months.\\n\\nSales of desk accessories have decreased by 12% compared to last quarter.\\n\\n📈 Trend analysis based on 6-month data.\", "
+                "\"actions\": \"**⚠ Restock Recommendations:**\\n- Wireless Mouse (8 remaining)\\n- Ergonomic Keyboard (12 remaining)\\n- Monitor Stand (Out of Stock)\\n**💡 Optimization Suggestions:**\\n- Consider bundling wireless peripherals for increased sales\\n- Reduce desk lamp inventory by 15% based on seasonal trends\"}\n\n"
+                "Now, generate the insights based on the provided data. Add more information on what each of the inventory items are mostly used for in Summary and ensure the output is concise and professional."
             )
 
             response = requests.post(
@@ -71,9 +74,7 @@ class InsightsView(APIView):
                 },
                 json={
                     "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.3,
-                    "max_tokens": 500,
+                    "messages": [{"role": "user", "content": prompt}]
                 },
             )
 
