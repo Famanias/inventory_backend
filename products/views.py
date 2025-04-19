@@ -58,7 +58,7 @@ class InsightsView(APIView):
             total_items = products.count()
             total_value = sum(p.quantity * p.price for p in products)
             categories = list(set(p.category for p in products))
-            low_stock = [p for p in products if p.quantity <= 10]
+            low_stock = [p for p in products if p.quantity < 10 and p.quantity != 0]
             out_of_stock = [p for p in products if p.quantity == 0]
 
             # Calculate category percentages
@@ -98,7 +98,8 @@ class InsightsView(APIView):
                 "Third paragraph: Summarize how demand patterns and inventory management affect sales, customer experience, or operational efficiency (e.g., 'High demand for X, paired with strong inventory practices, likely boosts customer satisfaction by ensuring product availability'). Highlight any potential risks or opportunities, such as overstocking less popular items or scaling up stock for high-demand products."
                 "Fourth paragraph: End with a note like '📈 Trend analysis based on current data, with recommendations for improvement'.\n"
                 "- **Actions**: Provide recommendations in two sections with markdown formatting:\n"
-                "  - Start with '**⚠ Restock Recommendations:**' followed by a markdown list (using '-') of specific low or out-of-stock items (e.g., '- Wireless Mouse (8 remaining)').\n"
+                "  - Start with '**❗ Out of Stock:**' followed by a markdown list (using '-') of out-of-stock items (e.g., '- Wireless Mouse').\n"
+                "  - Followed '**⚠️ Low on Stock:**' followed by a markdown list (using '-') of low stock items or items less than 10 (e.g., '- [8] Wireless Mouse').\n"
                 "  - Then add '**💡 Optimization Suggestions:**' Provide strategic suggestions to improve inventory management in a markdown list (using '-'). Base recommendations on trends, demand, or efficiency (e.g., '- Reduce desk lamp inventory by 15% due to seasonal demand decline', '- Increase stock of high-demand wireless keyboards by 10%').\n"
                 "  - Use \\n for line breaks between bullets and sections.\n"
                 "- Each section should be as detailed as possible.\n"
@@ -107,11 +108,13 @@ class InsightsView(APIView):
                 "**Example Output**:\n"
                 "{\"summary\": \"Your inventory consists of 93 items across 5 categories, with a total value of $12,489.75.\\n\\nElectronics is your largest category (42%), followed by Home Office (28%) and Accessories (15%).\\n\\n🔄 Based on historical data, your current inventory levels are 18% higher than the same period last year.\", "
                 "\"trends\": \"Wireless Headphones and Ergonomic Keyboards have shown consistent growth over the past 3 months.\\n\\nSales of desk accessories have decreased by 12% compared to last quarter.\\n\\n📈 Trend analysis based on 6-month data.\", "
-                "\"actions\": \"**⚠ Restock Recommendations:**\\n- Wireless Mouse (8 remaining)\\n- Ergonomic Keyboard (12 remaining)\\n- Monitor Stand (Out of Stock)\\n**💡 Optimization Suggestions:**\\n- Consider bundling wireless peripherals for increased sales\\n- Reduce desk lamp inventory by 15% based on seasonal trends\"}\n\n"
+                "\"actions\": \"**❗ Out of Stock:**\\n- Wireless Mouse\\n- Ergonomic Keyboard\\n- Monitor Stand\\n**⚠️ Low on Stock:**\\n-[2] Wireless Keyboard\\n-[9] Wireless Earphones\\n**💡 Optimization Suggestions:**\\n- Consider bundling wireless peripherals for increased sales\\n- Reduce desk lamp inventory by 15% based on seasonal trends\"}\n\n"
                 "Now, generate the insights based on the provided data. Add more information on what each of the item category are mostly used for in Summary and ensure the output is concise and professional."
                 "Make at least 5 optimization suggestions."
                 "Make sure to include the emojis and markdown formatting as specified."
+                "Ensure that the Low on Stock displays the number of items in square brackets (e.g., -[2] Wireless Keyboard)."
                 "- **Important Note**: Ensure the JSON output is syntactically correct (e.g., proper brackets, quotes, commas). Do not include trailing commas, unclosed brackets, or any invalid JSON syntax. Double-check that the output can be parsed by a JSON parser without errors."
+                "Ensure that the JSON output will not return this error: Failed to generate insights error: Invalid JSON format in Groq response."
             )
 
             response = requests.post(
@@ -139,26 +142,29 @@ class InsightsView(APIView):
             print(f"Raw Groq response: {content}")
 
             import re
-            json_match = re.search(r"```json\n([\s\S]*?)\n```", content)
-            if not json_match:
-                print(f"Failed to find JSON block in Groq response: {content}")
-                return Response(
-                    {"error": "Invalid JSON format in Groq response"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
+            json_match = re.search(r"```json\s*\n([\s\S]*?)\n```", content)
+
+            if json_match:
+                json_text = json_match.group(1)
+            else:
+                # Fallback: Try using full content directly
+                json_text = content.strip()
             
             try:
-                generated_insights = json.loads(json_match.group(1))
-                # Validate expected keys
+                generated_insights = json.loads(json_text)
+
+                # Check for required keys
                 if not all(key in generated_insights for key in ["summary", "trends", "actions"]):
                     print(f"Missing required keys in Groq response: {generated_insights}")
                     return Response(
                         {"error": "Incomplete insights data from Groq API"},
                         status=status.HTTP_500_INTERNAL_SERVER_ERROR
                     )
+
                 return Response(generated_insights)
+
             except json.JSONDecodeError as e:
-                print(f"JSON parse error: {str(e)}, content: {json_match.group(1)}")
+                print(f"JSON parse error: {str(e)}, content: {json_text}")
                 return Response(
                     {"error": "Invalid JSON format in Groq response"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR

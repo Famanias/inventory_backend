@@ -21,7 +21,6 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from users.views import RegisterView, LoginView
-from products.views import InsightsView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
