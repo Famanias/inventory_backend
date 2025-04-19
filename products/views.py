@@ -1,34 +1,78 @@
 from rest_framework import generics
-from .models import Product
-from .serializers import ProductSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from .models import Product
+from .serializers import ProductSerializer
 from django.conf import settings
 import requests
 import json
 
-
-# Create your views here.
 class ProductListCreateView(generics.ListCreateAPIView):
-    queryset = Product.objects.all()
     serializer_class = ProductSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Only return products for the authenticated user
+        return Product.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        # Automatically set the user to the authenticated user
+        serializer.save(user=self.request.user)
 
 class ProductRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Product.objects.all()
     serializer_class = ProductSerializer
     lookup_field = 'id'
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Only return products for the authenticated user
+        return Product.objects.filter(user=self.request.user)
 
 class InsightsView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         try:
-            products = Product.objects.all()
+            # Ensure the user is authenticated
+            if not request.user.is_authenticated:
+                return Response(
+                    {"error": "Authentication required"},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
 
-            total_items= products.count()
+            products = Product.objects.filter(user=request.user)
+
+            # Handle empty inventory
+            if not products.exists():
+                return Response(
+                    {
+                        "summary": "No inventory data available.",
+                        "trends": "No trends available due to lack of inventory data.",
+                        "actions": "No actions recommended at this time."
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            total_items = products.count()
             total_value = sum(p.quantity * p.price for p in products)
             categories = list(set(p.category for p in products))
             low_stock = [p for p in products if p.quantity <= 10]
             out_of_stock = [p for p in products if p.quantity == 0]
+
+            # Calculate category percentages
+            category_counts = {}
+            for product in products:
+                category_counts[product.category] = category_counts.get(product.category, 0) + 1
+            category_percentages = {
+                cat: (count / total_items * 100) for cat, count in category_counts.items()
+            }
+            sorted_categories = sorted(
+                category_percentages.items(),
+                key=lambda x: x[1],
+                reverse=True
+            )   
 
             inventory_summary = (
                 f"Total items: {total_items}\n"
@@ -67,6 +111,7 @@ class InsightsView(APIView):
                 "Now, generate the insights based on the provided data. Add more information on what each of the item category are mostly used for in Summary and ensure the output is concise and professional."
                 "Make at least 5 optimization suggestions."
                 "Make sure to include the emojis and markdown formatting as specified."
+                "- **Important Note**: Ensure the JSON output is syntactically correct (e.g., proper brackets, quotes, commas). Do not include trailing commas, unclosed brackets, or any invalid JSON syntax. Double-check that the output can be parsed by a JSON parser without errors."
             )
 
             response = requests.post(
